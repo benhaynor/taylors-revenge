@@ -35,6 +35,14 @@
   }
   button.play-btn:hover { background: linear-gradient(135deg, #e06, #c04080); transform: scale(1.05); }
   #loadingBar { color: #d4508b; font-size: 14px; margin-top: 10px; }
+  #musicBtn {
+    position: absolute; bottom: 12px; right: 12px; z-index: 30;
+    font-family: Georgia, serif; font-size: 14px; padding: 8px 16px;
+    background: rgba(212, 80, 139, 0.3); color: #f5a; border: 1px solid #d4508b;
+    border-radius: 20px; cursor: pointer; transition: all 0.2s;
+  }
+  #musicBtn:hover { background: rgba(212, 80, 139, 0.5); }
+  #ytPlayer { position: absolute; top: -9999px; left: -9999px; width: 1px; height: 1px; }
 </style>
 </head>
 <body>
@@ -64,8 +72,68 @@
 </div>
 
 <canvas id="game"></canvas>
+<button id="musicBtn" onclick="toggleMusic()">Music: OFF</button>
+<div id="ytPlayer"></div>
 
 <script>
+// --- YouTube Music Player ---
+let ytPlayer = null;
+let musicPlaying = false;
+
+// Taylor Swift song video IDs
+const TAYLOR_SONGS = [
+  'nfWlot6h_JM', // Shake It Off
+  'QcIy9NiNbmo', // Bad Blood
+  'WA4iX5D9Z64', // We Are Never Getting Back Together
+  'e-ORhEE9VVg', // Blank Space
+  'IC-DF3HTYkc', // I Knew You Were Trouble (Taylor's Version)
+  '8xg3vE8Ie_E', // Style
+];
+
+function onYouTubeIframeAPIReady() {
+  ytPlayer = new YT.Player('ytPlayer', {
+    height: '1',
+    width: '1',
+    videoId: TAYLOR_SONGS[0],
+    playerVars: {
+      autoplay: 0,
+      loop: 1,
+      playlist: TAYLOR_SONGS.join(','),
+    },
+    events: {
+      onStateChange: function(event) {
+        if (event.data === YT.PlayerState.ENDED) {
+          // Play next random song
+          let nextIdx = Math.floor(Math.random() * TAYLOR_SONGS.length);
+          ytPlayer.loadVideoById(TAYLOR_SONGS[nextIdx]);
+        }
+      }
+    }
+  });
+}
+
+function toggleMusic() {
+  let btn = document.getElementById('musicBtn');
+  if (!ytPlayer || typeof ytPlayer.playVideo !== 'function') {
+    btn.textContent = 'Loading...';
+    return;
+  }
+  if (musicPlaying) {
+    ytPlayer.pauseVideo();
+    musicPlaying = false;
+    btn.textContent = 'Music: OFF';
+  } else {
+    ytPlayer.playVideo();
+    musicPlaying = true;
+    btn.textContent = 'Music: ON';
+  }
+}
+
+// Load YouTube IFrame API
+let ytScript = document.createElement('script');
+ytScript.src = 'https://www.youtube.com/iframe_api';
+document.head.appendChild(ytScript);
+
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const W = canvas.width = 900;
