@@ -58,7 +58,12 @@
     border-radius: 20px; cursor: pointer; -webkit-tap-highlight-color: transparent;
   }
   #musicBtn:hover { background: rgba(212, 80, 139, 0.5); }
-  #musicFrame { position: absolute; top: -9999px; left: -9999px; width: 1px; height: 1px; pointer-events: none; }
+  #spotifyPlayer {
+    display: none; position: absolute; bottom: 40px; right: 8px; z-index: 30;
+    border-radius: 12px; overflow: hidden;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+  }
+  #spotifyPlayer iframe { display: block; }
   canvas { position: relative; z-index: 1; }
 </style>
 </head>
@@ -93,6 +98,7 @@
 
   <canvas id="game"></canvas>
 
+  <div id="spotifyPlayer"></div>
   <button id="musicBtn" onclick="toggleMusic()">Music: OFF</button>
 </div>
 
@@ -101,28 +107,31 @@
 const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 if (isTouchDevice) document.body.classList.add('touch-device');
 
-// --- Music Player ---
+// --- Music Player (Spotify) ---
 let musicPlaying = false;
-let musicFrame = null;
-const TAYLOR_SONGS = [
-  'nfWlot6h_JM','QcIy9NiNbmo','WA4iX5D9Z64','e-ORhEE9VVg','IC-DF3HTYkc','8xg3vE8Ie_E',
-];
 function toggleMusic() {
   let btn = document.getElementById('musicBtn');
+  let container = document.getElementById('spotifyPlayer');
   if (musicPlaying) {
-    if (musicFrame) { musicFrame.remove(); musicFrame = null; }
+    container.style.display = 'none';
+    container.innerHTML = '';
     musicPlaying = false;
     btn.textContent = 'Music: OFF';
   } else {
-    let songList = TAYLOR_SONGS.sort(() => Math.random() - 0.5);
-    musicFrame = document.createElement('iframe');
-    musicFrame.id = 'musicFrame';
-    musicFrame.allow = 'autoplay';
-    musicFrame.src = 'https://www.youtube.com/embed/' + songList[0] +
-      '?autoplay=1&loop=1&playlist=' + songList.join(',');
-    document.body.appendChild(musicFrame);
+    let iframe = document.createElement('iframe');
+    iframe.style.borderRadius = '12px';
+    iframe.width = '280';
+    iframe.height = '80';
+    iframe.frameBorder = '0';
+    iframe.allow = 'autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture';
+    iframe.loading = 'lazy';
+    // "This Is Taylor Swift" playlist on Spotify
+    iframe.src = 'https://open.spotify.com/embed/playlist/37i9dQZF1DX5KpP2LN299J?utm_source=generator&theme=0';
+    container.innerHTML = '';
+    container.appendChild(iframe);
+    container.style.display = 'block';
     musicPlaying = true;
-    btn.textContent = 'Music: ON';
+    btn.textContent = 'Hide Music';
   }
 }
 
