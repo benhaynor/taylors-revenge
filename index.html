@@ -299,18 +299,14 @@ function isLeftHalf(clientX) {
 canvas.addEventListener('touchstart', e => {
   e.preventDefault();
   for (let t of e.changedTouches) {
-    if (isLeftHalf(t.clientX)) {
-      // Joystick - left side
+    // Joystick works anywhere on screen
+    if (!touchJoystick.active) {
       touchJoystick.active = true;
       touchJoystick.startX = t.clientX;
       touchJoystick.startY = t.clientY;
       touchJoystick.dx = 0;
       touchJoystick.dy = 0;
       touchJoystick.id = t.identifier;
-    } else {
-      // Fire - right side
-      touchFiring = true;
-      touchFireId = t.identifier;
     }
   }
 }, { passive: false });
