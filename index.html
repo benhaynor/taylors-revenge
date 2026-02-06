@@ -518,8 +518,10 @@ function update() {
       e.shootTimer--;
       if (e.shootTimer <= 0) {
         e.shootTimer = 70;
-        let angle = Math.atan2((player.y + player.h / 2) - (e.y + e.h / 2), (player.x + player.w / 2) - (e.x + e.w / 2));
-        bullets.push({ x: e.x, y: e.y + e.h / 2, vx: Math.cos(angle) * 4.5, vy: Math.sin(angle) * 4.5, color: '#88f', r: 5, damage: 1, friendly: false });
+        // Shoot leftward with slight vertical aim toward player
+        let dy = (player.y + player.h / 2) - (e.y + e.h / 2);
+        let vy = Math.max(-2, Math.min(2, dy * 0.03));
+        bullets.push({ x: e.x, y: e.y + e.h / 2, vx: -4.5, vy: vy, color: '#88f', r: 5, damage: 1, friendly: false });
       }
     }
     if (e.x + e.w < -30) { enemies.splice(i, 1); continue; }
