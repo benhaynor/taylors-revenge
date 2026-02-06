@@ -59,11 +59,11 @@
   }
   #musicBtn:hover { background: rgba(212, 80, 139, 0.5); }
   #spotifyPlayer {
-    display: none; position: absolute; bottom: 40px; right: 8px; z-index: 30;
+    position: absolute; bottom: 40px; right: 8px; z-index: 30;
     border-radius: 12px; overflow: hidden;
     box-shadow: 0 0 20px rgba(0,0,0,0.5);
   }
-  #spotifyPlayer iframe { display: block; }
+  #spotifyPlayer iframe { display: block; border-radius: 12px; }
   canvas { position: relative; z-index: 1; }
 </style>
 </head>
@@ -98,8 +98,19 @@
 
   <canvas id="game"></canvas>
 
-  <div id="spotifyPlayer"></div>
-  <button id="musicBtn" onclick="toggleMusic()">Music: OFF</button>
+  <div id="spotifyPlayer">
+    <iframe
+      style="border-radius:12px"
+      src="https://open.spotify.com/embed/playlist/37i9dQZF1DX5KpP2LN299J?utm_source=generator&theme=0"
+      width="300"
+      height="152"
+      frameBorder="0"
+      allowfullscreen=""
+      allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+      loading="lazy">
+    </iframe>
+  </div>
+  <button id="musicBtn" onclick="toggleMusic()">Hide Music</button>
 </div>
 
 <script>
@@ -108,29 +119,17 @@ const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 
 if (isTouchDevice) document.body.classList.add('touch-device');
 
 // --- Music Player (Spotify) ---
-let musicPlaying = false;
+let musicVisible = true;
 function toggleMusic() {
   let btn = document.getElementById('musicBtn');
   let container = document.getElementById('spotifyPlayer');
-  if (musicPlaying) {
+  if (musicVisible) {
     container.style.display = 'none';
-    container.innerHTML = '';
-    musicPlaying = false;
-    btn.textContent = 'Music: OFF';
+    musicVisible = false;
+    btn.textContent = 'Show Music';
   } else {
-    let iframe = document.createElement('iframe');
-    iframe.style.borderRadius = '12px';
-    iframe.width = '280';
-    iframe.height = '80';
-    iframe.frameBorder = '0';
-    iframe.allow = 'autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture';
-    iframe.loading = 'lazy';
-    // "This Is Taylor Swift" playlist on Spotify
-    iframe.src = 'https://open.spotify.com/embed/playlist/37i9dQZF1DX5KpP2LN299J?utm_source=generator&theme=0';
-    container.innerHTML = '';
-    container.appendChild(iframe);
     container.style.display = 'block';
-    musicPlaying = true;
+    musicVisible = true;
     btn.textContent = 'Hide Music';
   }
 }
