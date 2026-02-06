@@ -208,15 +208,24 @@ for (let [key, url] of Object.entries(IMAGE_URLS)) {
 
 // Ex-boyfriend data
 const EXES = [
-  { key: 'joe_jonas',       name: 'Joe Jonas',       hp: 2, speed: 2.0, size: 50, type: 'standard', points: 20 },
-  { key: 'taylor_lautner',  name: 'Taylor Lautner',  hp: 1, speed: 3.5, size: 44, type: 'fast',     points: 30 },
-  { key: 'john_mayer',      name: 'John Mayer',      hp: 4, speed: 1.3, size: 58, type: 'bomber',   points: 50 },
-  { key: 'jake_gyllenhaal', name: 'Jake Gyllenhaal', hp: 3, speed: 1.6, size: 55, type: 'standard', points: 35 },
-  { key: 'harry_styles',    name: 'Harry Styles',    hp: 2, speed: 2.8, size: 48, type: 'fast',     points: 30 },
-  { key: 'calvin_harris',   name: 'Calvin Harris',   hp: 3, speed: 1.8, size: 54, type: 'bomber',   points: 45 },
-  { key: 'tom_hiddleston',  name: 'Tom Hiddleston',  hp: 2, speed: 2.2, size: 50, type: 'standard', points: 25 },
-  { key: 'joe_alwyn',       name: 'Joe Alwyn',       hp: 5, speed: 1.2, size: 60, type: 'bomber',   points: 60 },
-  { key: 'eddie_redmayne',  name: 'Eddie Redmayne',  hp: 1, speed: 3.2, size: 42, type: 'fast',     points: 25 },
+  { key: 'joe_jonas',       name: 'Joe Jonas',       hp: 2, speed: 2.0, size: 50, type: 'standard', points: 20,
+    quote: '27 seconds is all it took', quoteColor: '#fa0' },
+  { key: 'taylor_lautner',  name: 'Taylor Lautner',  hp: 1, speed: 3.5, size: 44, type: 'fast',     points: 30,
+    quote: 'Sorry about December...', quoteColor: '#8cf' },
+  { key: 'john_mayer',      name: 'John Mayer',      hp: 4, speed: 1.3, size: 58, type: 'bomber',   points: 50,
+    quote: "Don't you think 19's too young?", quoteColor: '#f66' },
+  { key: 'jake_gyllenhaal', name: 'Jake Gyllenhaal', hp: 3, speed: 1.6, size: 55, type: 'standard', points: 35,
+    quote: 'She wants her scarf back', quoteColor: '#e44' },
+  { key: 'harry_styles',    name: 'Harry Styles',    hp: 2, speed: 2.8, size: 48, type: 'fast',     points: 30,
+    quote: 'We never go out of style', quoteColor: '#f5a' },
+  { key: 'calvin_harris',   name: 'Calvin Harris',   hp: 3, speed: 1.8, size: 54, type: 'bomber',   points: 45,
+    quote: 'Receipt: deleted', quoteColor: '#4af' },
+  { key: 'tom_hiddleston',  name: 'Tom Hiddleston',  hp: 2, speed: 2.2, size: 50, type: 'standard', points: 25,
+    quote: 'I \u2764 T.S.', quoteColor: '#fff' },
+  { key: 'joe_alwyn',       name: 'Joe Alwyn',       hp: 5, speed: 1.2, size: 60, type: 'bomber',   points: 60,
+    quote: '6 years of hiding for what?', quoteColor: '#aaf' },
+  { key: 'eddie_redmayne',  name: 'Eddie Redmayne',  hp: 1, speed: 3.2, size: 42, type: 'fast',     points: 25,
+    quote: 'At least you got the Oscar', quoteColor: '#fd0' },
 ];
 
 // Game state
@@ -331,7 +340,8 @@ function spawnEnemy() {
     maxHp: template.hp + Math.floor(difficultyMult * 0.5),
     speed: template.speed + difficultyMult * 0.2,
     type: template.type, key: template.key, name: template.name,
-    points: template.points, shootTimer: 80,
+    points: template.points, quote: template.quote, quoteColor: template.quoteColor,
+    shootTimer: 80, hasRespawned: false,
     bobPhase: Math.random() * Math.PI * 2,
   });
 }
@@ -535,10 +545,86 @@ function update() {
         if (e.hp <= 0) {
           score += e.points;
           if (!defeatedExes.includes(e.name)) defeatedExes.push(e.name);
-          spawnParticles(eCx, eCy, '#f44', 18, true);
-          addFloatingText(e.x, e.y - 20, e.name + '!', '#f5a');
-          addFloatingText(e.x, e.y + 5, '+' + e.points, '#ff0');
-          spawnPowerUp(e.x, e.y); enemies.splice(i, 1); break;
+
+          // --- Custom defeat effects per ex ---
+          let didRemove = true;
+
+          if (e.key === 'joe_jonas') {
+            // 27-second phone call breakup - extra fast tiny explosion
+            spawnParticles(eCx, eCy, '#fa0', 30, false);
+            addFloatingText(e.x, e.y - 25, '"27 seconds is all it took"', '#fa0');
+
+          } else if (e.key === 'taylor_lautner') {
+            // She apologized to him - drops an apology note (extra life!)
+            spawnParticles(eCx, eCy, '#8cf', 15, true);
+            addFloatingText(e.x, e.y - 25, '"Sorry about December..."', '#8cf');
+            if (lives < 5) { lives++; addFloatingText(e.x, e.y + 20, '+1 Life (apology)', '#0f0'); }
+
+          } else if (e.key === 'john_mayer') {
+            // Dear John - brutal, lingering explosion
+            spawnParticles(eCx, eCy, '#f66', 40, true);
+            for (let k = 0; k < 3; k++) {
+              spawnParticles(eCx + (Math.random()-0.5)*40, eCy + (Math.random()-0.5)*40, '#f44', 10, true);
+            }
+            addFloatingText(e.x, e.y - 25, "\"Don't you think 19's too young?\"", '#f66');
+
+          } else if (e.key === 'jake_gyllenhaal') {
+            // The scarf! Drops a special scarf power-up
+            spawnParticles(eCx, eCy, '#e44', 20, true);
+            addFloatingText(e.x, e.y - 25, '"She wants her scarf back"', '#e44');
+            // Always drop a scarf (spread) power-up
+            powerUps.push({ x: e.x, y: e.y, w: 28, h: 28, vx: -0.8, vy: 0,
+              type: 'spread', color: '#e44', label: 'THE SCARF', duration: 700,
+              emoji: '\uD83E\uDDE3', bobPhase: 0 });
+
+          } else if (e.key === 'harry_styles') {
+            // They kept getting back together - respawns once
+            if (!e.hasRespawned) {
+              spawnParticles(eCx, eCy, '#f5a', 12, true);
+              addFloatingText(e.x, e.y - 25, '"We never go out of style"', '#f5a');
+              addFloatingText(e.x, e.y + 5, 'He\'s back!', '#ff0');
+              // Respawn him at right edge
+              e.hp = 2; e.maxHp = 2; e.hasRespawned = true;
+              e.x = GW + e.w; e.y = Math.random() * (GH - e.h * 2) + e.h;
+              didRemove = false;
+            } else {
+              spawnParticles(eCx, eCy, '#f5a', 25, true);
+              addFloatingText(e.x, e.y - 25, '"Now we\'re done for real"', '#f5a');
+            }
+
+          } else if (e.key === 'calvin_harris') {
+            // Angry tweet deletion - blue "tweet" particles
+            spawnParticles(eCx, eCy, '#1DA1F2', 25, false);
+            spawnParticles(eCx, eCy, '#f44', 10, false);
+            addFloatingText(e.x, e.y - 25, '"Receipt: deleted"', '#1DA1F2');
+
+          } else if (e.key === 'tom_hiddleston') {
+            // The I heart T.S. tank top
+            spawnParticles(eCx, eCy, '#fff', 20, true);
+            addFloatingText(e.x, e.y - 25, 'I \u2764 T.S.', '#fff');
+            addFloatingText(e.x, e.y + 5, 'Tank top destroyed', '#f88');
+
+          } else if (e.key === 'joe_alwyn') {
+            // 6 year private relationship - big dramatic explosion
+            spawnParticles(eCx, eCy, '#aaf', 35, true);
+            for (let k = 0; k < 4; k++) {
+              spawnParticles(eCx + (Math.random()-0.5)*60, eCy + (Math.random()-0.5)*60, '#88f', 8, true);
+            }
+            addFloatingText(e.x, e.y - 25, '"6 years of hiding for what?"', '#aaf');
+
+          } else if (e.key === 'eddie_redmayne') {
+            // Oscar winner - gold trophy particles
+            spawnParticles(eCx, eCy, '#fd0', 20, false);
+            spawnParticles(eCx, eCy, '#fa0', 10, false);
+            addFloatingText(e.x, e.y - 25, '"At least you got the Oscar"', '#fd0');
+
+          } else {
+            spawnParticles(eCx, eCy, '#f44', 18, true);
+          }
+
+          addFloatingText(e.x + 30, e.y + 5, '+' + e.points, '#ff0');
+          if (didRemove) { spawnPowerUp(e.x, e.y); enemies.splice(i, 1); }
+          break;
         }
       }
     }
