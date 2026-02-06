@@ -59,24 +59,7 @@
   }
   #musicBtn:hover { background: rgba(212, 80, 139, 0.5); }
   #musicFrame { position: absolute; top: -9999px; left: -9999px; width: 1px; height: 1px; pointer-events: none; }
-  /* Touch controls overlay */
-  #touchControls {
-    display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-    z-index: 5; pointer-events: none;
-  }
-  .touch-device #touchControls { display: block; }
-  #joystickArea {
-    position: absolute; left: 0; bottom: 0; width: 45%; height: 55%;
-    pointer-events: auto;
-  }
-  #fireArea {
-    position: absolute; right: 0; bottom: 0; width: 45%; height: 55%;
-    pointer-events: auto;
-  }
-  #fireHint {
-    position: absolute; right: 10%; bottom: 12%; color: #f5a44; font-size: 14px;
-    font-family: Georgia, serif; pointer-events: none; text-align: center;
-  }
+  canvas { position: relative; z-index: 1; }
 </style>
 </head>
 <body>
@@ -109,12 +92,6 @@
   </div>
 
   <canvas id="game"></canvas>
-
-  <div id="touchControls">
-    <div id="joystickArea"></div>
-    <div id="fireArea"></div>
-    <div id="fireHint">HOLD TO FIRE</div>
-  </div>
 
   <button id="musicBtn" onclick="toggleMusic()">Music: OFF</button>
 </div>
@@ -250,27 +227,38 @@ let floatingTexts = [];
 document.addEventListener('keydown', e => { keys_pressed[e.key] = true; if(e.key === ' ') e.preventDefault(); });
 document.addEventListener('keyup', e => { keys_pressed[e.key] = false; });
 
-// --- Touch input ---
+// --- Touch input (all handled on canvas) ---
 let touchJoystick = { active: false, startX: 0, startY: 0, dx: 0, dy: 0, id: null };
 let touchFiring = false;
 let touchFireId = null;
 
-const joystickArea = document.getElementById('joystickArea');
-const fireArea = document.getElementById('fireArea');
+// Determine if a screen-space touch is on the left or right half
+function isLeftHalf(clientX) {
+  let rect = canvas.getBoundingClientRect();
+  let mid = rect.left + rect.width / 2;
+  return clientX < mid;
+}
 
-// Joystick touch
-joystickArea.addEventListener('touchstart', e => {
+canvas.addEventListener('touchstart', e => {
   e.preventDefault();
-  let t = e.changedTouches[0];
-  touchJoystick.active = true;
-  touchJoystick.startX = t.clientX;
-  touchJoystick.startY = t.clientY;
-  touchJoystick.dx = 0;
-  touchJoystick.dy = 0;
-  touchJoystick.id = t.identifier;
+  for (let t of e.changedTouches) {
+    if (isLeftHalf(t.clientX)) {
+      // Joystick - left side
+      touchJoystick.active = true;
+      touchJoystick.startX = t.clientX;
+      touchJoystick.startY = t.clientY;
+      touchJoystick.dx = 0;
+      touchJoystick.dy = 0;
+      touchJoystick.id = t.identifier;
+    } else {
+      // Fire - right side
+      touchFiring = true;
+      touchFireId = t.identifier;
+    }
+  }
 }, { passive: false });
 
-joystickArea.addEventListener('touchmove', e => {
+canvas.addEventListener('touchmove', e => {
   e.preventDefault();
   for (let t of e.changedTouches) {
     if (t.identifier === touchJoystick.id) {
@@ -280,37 +268,22 @@ joystickArea.addEventListener('touchmove', e => {
   }
 }, { passive: false });
 
-joystickArea.addEventListener('touchend', e => {
+canvas.addEventListener('touchend', e => {
   for (let t of e.changedTouches) {
     if (t.identifier === touchJoystick.id) {
-      touchJoystick.active = false;
-      touchJoystick.dx = 0;
-      touchJoystick.dy = 0;
-      touchJoystick.id = null;
+      touchJoystick.active = false; touchJoystick.dx = 0; touchJoystick.dy = 0; touchJoystick.id = null;
+    }
+    if (t.identifier === touchFireId) {
+      touchFiring = false; touchFireId = null;
     }
   }
 });
-joystickArea.addEventListener('touchcancel', e => {
-  touchJoystick.active = false;
-  touchJoystick.dx = 0;
-  touchJoystick.dy = 0;
-  touchJoystick.id = null;
+canvas.addEventListener('touchcancel', e => {
+  touchJoystick.active = false; touchJoystick.dx = 0; touchJoystick.dy = 0; touchJoystick.id = null;
+  touchFiring = false; touchFireId = null;
 });
 
-// Fire touch
-fireArea.addEventListener('touchstart', e => {
-  e.preventDefault();
-  touchFiring = true;
-  touchFireId = e.changedTouches[0].identifier;
-}, { passive: false });
-fireArea.addEventListener('touchend', e => {
-  for (let t of e.changedTouches) {
-    if (t.identifier === touchFireId) { touchFiring = false; touchFireId = null; }
-  }
-});
-fireArea.addEventListener('touchcancel', e => { touchFiring = false; touchFireId = null; });
-
-// Prevent page scrolling/zooming on canvas
+// Prevent page scrolling/zooming everywhere
 document.addEventListener('touchmove', e => { e.preventDefault(); }, { passive: false });
 
 // Power-up types
@@ -324,7 +297,6 @@ const POWER_TYPES = [
 function startGame() {
   document.getElementById('startScreen').style.display = 'none';
   document.getElementById('gameOverScreen').style.display = 'none';
-  document.getElementById('fireHint').style.display = 'none';
   player = { x: 80, y: GH / 2, w: 60, h: 60, speed: 5 };
   bullets = []; enemies = []; particles = []; powerUps = []; floatingTexts = [];
   score = 0; lives = 3; wave = 1; waveTimer = 0; spawnTimer = 0;
