@@ -25,13 +25,14 @@
     pointer-events: none; z-index: 10; white-space: nowrap;
     text-shadow: 0 0 10px #d4508b;
   }
-  #startScreen, #gameOverScreen {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    color: #fff; font-family: Georgia, serif; text-align: center; z-index: 20;
-    background: rgba(20, 5, 30, 0.94); padding: 30px 36px; border-radius: 16px;
+  #startScreen, #gameOverScreen, #winScreen {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    color: #fff; font-family: Georgia, serif; text-align: center; z-index: 50;
+    background: rgba(20, 5, 30, 0.97); padding: 30px 36px; border-radius: 16px;
     border: 2px solid #d4508b; box-shadow: 0 0 40px #d4508b44;
-    max-width: 90vw;
+    max-width: 90vw; max-height: 90vh; overflow-y: auto;
   }
+  #winScreen { border-color: #fd0; box-shadow: 0 0 60px #fd044; }
   #startScreen h1, #gameOverScreen h1 {
     font-size: clamp(24px, 6vw, 42px); margin-bottom: 8px; color: #f5a;
     text-shadow: 0 0 20px #f5a;
