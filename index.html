@@ -260,11 +260,27 @@ let difficultyMult = 1;
 let defeatedExes = [];
 let floatingTexts = [];
 let gameTimer = 0;
-let winState = 0; // 0 = playing, 1 = travis entering, 2 = won
+let winState = 0; // 0 = playing, 1 = travis entering, 2 = kneeling, 3 = ring out, 4 = won
 let travis = null;
+let fireworks = [];
+let fireworkTimer = 0;
+let proposalTimer = 0;
+let ringSparkles = [];
 
-// --- Keyboard input ---
-document.addEventListener('keydown', e => { keys_pressed[e.key] = true; if(e.key === ' ') e.preventDefault(); });
+// --- Cheat code: type "qqqqqq" to skip to ending ---
+let cheatBuffer = '';
+document.addEventListener('keydown', e => {
+  keys_pressed[e.key] = true;
+  if (e.key === ' ') e.preventDefault();
+  if (gameRunning && winState === 0) {
+    cheatBuffer += e.key;
+    if (cheatBuffer.length > 10) cheatBuffer = cheatBuffer.slice(-10);
+    if (cheatBuffer.includes('qqqqqq')) {
+      cheatBuffer = '';
+      gameTimer = 3599; // Will trigger win on next frame
+    }
+  }
+});
 document.addEventListener('keyup', e => { keys_pressed[e.key] = false; });
 
 // --- Touch input (all handled on canvas) ---
@@ -343,6 +359,8 @@ function startGame() {
   if (sp) sp.src = 'https://open.spotify.com/embed/playlist/37i9dQZF1DX5KpP2LN299J?utm_source=generator&theme=0';
   player = { x: 80, y: GH / 2, w: 60, h: 60, speed: 5 };
   gameTimer = 0; winState = 0; travis = null;
+  fireworks = []; fireworkTimer = 0; proposalTimer = 0; ringSparkles = [];
+  cheatBuffer = '';
   bullets = []; enemies = []; particles = []; powerUps = []; floatingTexts = [];
   score = 0; lives = 3; wave = 1; waveTimer = 0; spawnTimer = 0;
   shootCooldown = 0; invincibleTimer = 0; activePower = null; powerTimer = 0;
@@ -392,6 +410,156 @@ function spawnParticles(x, y, color, count, isHeart) {
 
 function addFloatingText(x, y, text, color) {
   floatingTexts.push({ x, y, text, color, life: 60, vy: -1.5 });
+}
+
+function launchFirework(x, y) {
+  let colors = ['#f5a', '#fd0', '#0ff', '#f44', '#af0', '#f0f', '#fa0', '#4af', '#fff'];
+  let color = colors[Math.floor(Math.random() * colors.length)];
+  let count = 40 + Math.floor(Math.random() * 30);
+  let fw = { x, y, sparks: [], life: 80 };
+  for (let i = 0; i < count; i++) {
+    let angle = Math.random() * Math.PI * 2;
+    let speed = 1.5 + Math.random() * 4;
+    let sparkColor = Math.random() < 0.3 ? '#fff' : color;
+    fw.sparks.push({
+      x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+      color: sparkColor, life: 50 + Math.random() * 40, size: 1.5 + Math.random() * 2.5,
+      trail: []
+    });
+  }
+  fireworks.push(fw);
+}
+
+function updateFireworks() {
+  for (let i = fireworks.length - 1; i >= 0; i--) {
+    let fw = fireworks[i];
+    fw.life--;
+    for (let j = fw.sparks.length - 1; j >= 0; j--) {
+      let s = fw.sparks[j];
+      s.trail.push({ x: s.x, y: s.y, life: 12 });
+      s.x += s.vx; s.y += s.vy;
+      s.vy += 0.04; // gravity
+      s.vx *= 0.985; s.vy *= 0.985;
+      s.life--;
+      // Update trails
+      for (let k = s.trail.length - 1; k >= 0; k--) {
+        s.trail[k].life--;
+        if (s.trail[k].life <= 0) s.trail.splice(k, 1);
+      }
+      if (s.life <= 0) fw.sparks.splice(j, 1);
+    }
+    if (fw.life <= 0 && fw.sparks.length === 0) fireworks.splice(i, 1);
+  }
+}
+
+function drawFireworks() {
+  for (let fw of fireworks) {
+    for (let s of fw.sparks) {
+      // Draw trail
+      for (let t of s.trail) {
+        ctx.globalAlpha = (t.life / 12) * 0.4;
+        ctx.fillStyle = s.color;
+        ctx.beginPath(); ctx.arc(t.x, t.y, s.size * 0.6, 0, Math.PI * 2); ctx.fill();
+      }
+      // Draw spark
+      ctx.globalAlpha = Math.min(1, s.life / 20);
+      ctx.fillStyle = s.color;
+      ctx.shadowColor = s.color; ctx.shadowBlur = 8;
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawKneelingTravis(tCx, tBaseY, tR) {
+  // Body kneeling - one knee down
+  ctx.fillStyle = '#c41e3a'; // Chiefs red
+  // Kneeling leg (right, on ground)
+  ctx.fillRect(tCx - 8, tBaseY + tR + 20, 18, 12);
+  // Standing leg bent
+  ctx.fillRect(tCx + 8, tBaseY + tR + 8, 12, 24);
+  // Torso leaning forward
+  ctx.fillStyle = '#c41e3a';
+  ctx.beginPath();
+  ctx.ellipse(tCx + 2, tBaseY + tR + 6, 16, 22, -0.15, 0, Math.PI * 2);
+  ctx.fill();
+  // Arms extended holding ring box
+  ctx.fillStyle = '#c41e3a';
+  ctx.fillRect(tCx - 20, tBaseY + tR - 2, 24, 8);
+}
+
+function drawRingBox(x, y, openAmount) {
+  // Ring box
+  let boxW = 28, boxH = 20;
+  // Bottom half
+  ctx.fillStyle = '#2a0a0a';
+  ctx.fillRect(x - boxW/2, y, boxW, boxH/2);
+  // Velvet inside
+  ctx.fillStyle = '#600020';
+  ctx.fillRect(x - boxW/2 + 3, y + 2, boxW - 6, boxH/2 - 4);
+  // Lid (opens based on openAmount 0-1)
+  ctx.save();
+  ctx.translate(x - boxW/2, y);
+  ctx.rotate(-openAmount * 1.2);
+  ctx.fillStyle = '#2a0a0a';
+  ctx.fillRect(0, -boxH/2, boxW, boxH/2);
+  ctx.restore();
+  // Ring inside (visible when open)
+  if (openAmount > 0.3) {
+    ctx.globalAlpha = Math.min(1, (openAmount - 0.3) / 0.5);
+    // Ring band
+    ctx.strokeStyle = '#fd0';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.ellipse(x, y + 2, 6, 8, 0, 0, Math.PI); ctx.stroke();
+    // Diamond
+    let dSize = 4 + openAmount * 3;
+    ctx.fillStyle = '#fff';
+    ctx.shadowColor = '#fd0'; ctx.shadowBlur = 15;
+    ctx.beginPath();
+    ctx.moveTo(x, y - 4 - dSize);
+    ctx.lineTo(x + dSize, y - 4);
+    ctx.lineTo(x, y - 2);
+    ctx.lineTo(x - dSize, y - 4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    // Diamond sparkle
+    if (Math.random() < 0.4) {
+      ringSparkles.push({
+        x: x + (Math.random() - 0.5) * 20,
+        y: y - 4 - dSize + (Math.random() - 0.5) * 15,
+        life: 15 + Math.random() * 10, size: 1 + Math.random() * 2
+      });
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawRingSparkles() {
+  for (let i = ringSparkles.length - 1; i >= 0; i--) {
+    let s = ringSparkles[i];
+    ctx.globalAlpha = s.life / 25;
+    ctx.fillStyle = '#fff';
+    ctx.shadowColor = '#fd0'; ctx.shadowBlur = 6;
+    // 4-point star sparkle
+    let sz = s.size;
+    ctx.beginPath();
+    ctx.moveTo(s.x, s.y - sz * 2);
+    ctx.lineTo(s.x + sz * 0.5, s.y - sz * 0.5);
+    ctx.lineTo(s.x + sz * 2, s.y);
+    ctx.lineTo(s.x + sz * 0.5, s.y + sz * 0.5);
+    ctx.lineTo(s.x, s.y + sz * 2);
+    ctx.lineTo(s.x - sz * 0.5, s.y + sz * 0.5);
+    ctx.lineTo(s.x - sz * 2, s.y);
+    ctx.lineTo(s.x - sz * 0.5, s.y - sz * 0.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    s.life--;
+    if (s.life <= 0) ringSparkles.splice(i, 1);
+  }
+  ctx.globalAlpha = 1;
 }
 
 function drawHeart(cx, cy, size, color) {
@@ -544,9 +712,30 @@ function update() {
     }
     enemies = [];
     bullets = bullets.filter(b => b.friendly);
-    // Spawn Travis from the right
-    travis = { x: GW + 40, y: GH / 2 - 35, w: 70, h: 70, targetX: GW / 2 - 35 };
+    // Spawn Travis from the right - he walks in standing
+    travis = { x: GW + 40, y: GH / 2 - 35, w: 70, h: 70, targetX: GW / 2 + 40, kneelProgress: 0, ringOpen: 0 };
     addFloatingText(GW / 2, GH / 3, 'All exes defeated!', '#fd0');
+    // Switch Spotify to Love Story
+    let sp = document.querySelector('#spotifyPlayer iframe');
+    if (sp) sp.src = 'https://open.spotify.com/embed/track/3CeCwYWvdfXbZLXFhBrbnf?utm_source=generator&theme=0';
+    document.getElementById('spotifyPlayer').style.display = 'block';
+    // Launch initial fireworks
+    for (let i = 0; i < 3; i++) {
+      setTimeout(() => launchFirework(Math.random() * GW * 0.8 + GW * 0.1, Math.random() * GH * 0.4 + 30), i * 300);
+    }
+  }
+
+  // Update fireworks during all win states
+  if (winState >= 1) {
+    updateFireworks();
+    fireworkTimer++;
+    if (fireworkTimer % 25 === 0 && winState < 4) {
+      launchFirework(Math.random() * GW * 0.8 + GW * 0.1, Math.random() * GH * 0.4 + 30);
+    }
+    // Even more fireworks during proposal
+    if (winState >= 3 && fireworkTimer % 12 === 0) {
+      launchFirework(Math.random() * GW, Math.random() * GH * 0.5 + 20);
+    }
   }
 
   // Travis walking in
@@ -554,31 +743,62 @@ function update() {
     travis.x -= 3;
     if (travis.x <= travis.targetX) {
       travis.x = travis.targetX;
-      // Move player toward Travis
-      let targetPlayerX = travis.x - player.w - 20;
-      if (player.x < targetPlayerX - 2) {
-        player.x += 3;
-      } else {
-        // They've met! Show win screen
-        winState = 2;
-        gameRunning = false;
-        // Switch Spotify to Love Story
-        let sp = document.querySelector('#spotifyPlayer iframe');
-        if (sp) sp.src = 'https://open.spotify.com/embed/track/3CeCwYWvdfXbZLXFhBrbnf?utm_source=generator&theme=0';
-        document.getElementById('spotifyPlayer').style.display = 'block';
-        // Show win screen after a short delay
-        setTimeout(() => {
-          // Fill in portraits
-          let tayDiv = document.getElementById('winTaylor');
-          let travDiv = document.getElementById('winTravis');
-          if (images.taylor.complete) tayDiv.innerHTML = '<img src="' + images.taylor.src + '" style="width:100%;height:100%;object-fit:cover;">';
-          if (images.travis_kelce.complete) travDiv.innerHTML = '<img src="' + images.travis_kelce.src + '" style="width:100%;height:100%;object-fit:cover;">';
-          document.getElementById('winScore').textContent = 'Final Score: ' + score + ' | Exes defeated: ' + defeatedExes.length;
-          document.getElementById('winScreen').style.display = 'block';
-        }, 1500);
+      // Travis has arrived, now he kneels
+      winState = 2;
+      proposalTimer = 0;
+      addFloatingText(travis.x + travis.w / 2, travis.y - 30, 'Travis gets down on one knee...', '#fd0');
+    }
+  }
+
+  // Travis kneeling animation
+  if (winState === 2 && travis) {
+    proposalTimer++;
+    travis.kneelProgress = Math.min(1, proposalTimer / 60); // 1 second to kneel
+    // Move player toward Travis while he kneels
+    let targetPlayerX = travis.x - player.w - 40;
+    if (player.x < targetPlayerX - 2) player.x += 2.5;
+    let targetPlayerY = GH / 2 - player.h / 2;
+    if (Math.abs(player.y - targetPlayerY) > 2) player.y += (targetPlayerY - player.y) * 0.05;
+    if (proposalTimer >= 90) { // 1.5s kneeling, then open ring box
+      winState = 3;
+      proposalTimer = 0;
+      addFloatingText(GW / 2, GH / 3 - 20, '"Will you marry me?"', '#fd0');
+      // Big firework burst
+      for (let i = 0; i < 5; i++) {
+        setTimeout(() => launchFirework(Math.random() * GW, Math.random() * GH * 0.4 + 20), i * 150);
       }
     }
-    // Still update particles and hearts during Travis entrance
+  }
+
+  // Ring box opening + final moment
+  if (winState === 3 && travis) {
+    proposalTimer++;
+    travis.ringOpen = Math.min(1, proposalTimer / 50); // ring box opens over ~0.8s
+    // Move player closer
+    let targetPlayerX = travis.x - player.w - 25;
+    if (player.x < targetPlayerX - 2) player.x += 1.5;
+    if (proposalTimer >= 120) { // 2 seconds after ring box opens
+      winState = 4;
+      // Massive fireworks finale
+      for (let i = 0; i < 10; i++) {
+        setTimeout(() => launchFirework(Math.random() * GW, Math.random() * GH * 0.5 + 20), i * 120);
+      }
+      addFloatingText(GW / 2, GH / 2 - 80, '"YES!"', '#f5a');
+      // Show win screen after fireworks
+      setTimeout(() => {
+        gameRunning = false;
+        let tayDiv = document.getElementById('winTaylor');
+        let travDiv = document.getElementById('winTravis');
+        if (images.taylor.complete) tayDiv.innerHTML = '<img src="' + images.taylor.src + '" style="width:100%;height:100%;object-fit:cover;">';
+        if (images.travis_kelce.complete) travDiv.innerHTML = '<img src="' + images.travis_kelce.src + '" style="width:100%;height:100%;object-fit:cover;">';
+        document.getElementById('winScore').textContent = 'Final Score: ' + score + ' | Exes defeated: ' + defeatedExes.length;
+        document.getElementById('winScreen').style.display = 'block';
+      }, 3000);
+    }
+  }
+
+  // Keep animating during all win states
+  if (winState >= 1) {
     for (let i = particles.length - 1; i >= 0; i--) {
       let p = particles[i]; p.x += p.vx; p.y += p.vy; p.vx *= 0.95; p.vy *= 0.95;
       p.life--; if (p.life <= 0) particles.splice(i, 1);
@@ -843,20 +1063,94 @@ function draw() {
 
   // Travis Kelce
   if (travis && winState >= 1) {
-    let tCx = travis.x + travis.w / 2, tCy = travis.y + travis.h / 2, tR = travis.w / 2;
+    let tCx = travis.x + travis.w / 2;
+    let tR = travis.w / 2;
+    // Kneeling: head drops down and forward as he kneels
+    let kneelDrop = (travis.kneelProgress || 0) * 35;
+    let tCy = travis.y + travis.h / 2 + kneelDrop;
+
+    // Draw body if kneeling
+    if (travis.kneelProgress > 0) {
+      let bodyAlpha = travis.kneelProgress;
+      ctx.globalAlpha = bodyAlpha;
+      // Kneeling leg on ground
+      ctx.fillStyle = '#1a1a2e';
+      ctx.fillRect(tCx - 12, tCy + tR + 2, 22, 10); // knee on ground
+      // Other leg bent
+      ctx.fillRect(tCx + 10, tCy + tR - 8, 10, 20);
+      // Torso
+      ctx.fillStyle = '#c41e3a'; // Chiefs red jersey
+      ctx.beginPath();
+      ctx.ellipse(tCx, tCy + tR - 5, 18, 25, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Arm extended toward Taylor holding ring box
+      let armExtend = travis.kneelProgress;
+      ctx.fillStyle = '#c41e3a';
+      ctx.fillRect(tCx - 18 - armExtend * 15, tCy + tR - 12, 20 + armExtend * 15, 8);
+      ctx.globalAlpha = 1;
+    }
+
+    // Head (always drawn)
     ctx.shadowColor = '#fd0'; ctx.shadowBlur = 25;
     ctx.strokeStyle = '#fd0'; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(tCx, tCy, tR + 3, 0, Math.PI * 2); ctx.stroke();
     ctx.shadowBlur = 0;
     drawCircleImage(images.travis_kelce, tCx, tCy, tR);
+
+    // Name label
     ctx.fillStyle = '#fd0'; ctx.font = 'bold 13px Georgia'; ctx.textAlign = 'center';
-    ctx.fillText('Travis Kelce', tCx, travis.y + travis.h + 10);
-    // Draw ring emoji between them
-    if (winState >= 1 && travis.x <= travis.targetX + 50) {
-      ctx.font = '28px Georgia'; ctx.textAlign = 'center';
-      ctx.fillText('\uD83D\uDC8D', (player.x + player.w + travis.x) / 2, travis.y + travis.h / 2 - 30);
+    let labelY = travis.kneelProgress > 0.5 ? tCy + tR + 28 : travis.y + travis.h + 10;
+    ctx.fillText('Travis Kelce', tCx, labelY);
+
+    // Ring box (visible once kneeling is mostly done)
+    if (winState >= 2 && travis.kneelProgress >= 0.8) {
+      let ringBoxX = tCx - 35 - (travis.kneelProgress) * 15;
+      let ringBoxY = tCy + tR - 15;
+      drawRingBox(ringBoxX, ringBoxY, travis.ringOpen || 0);
+      drawRingSparkles();
+
+      // "Will you marry me?" text above the scene with glow
+      if (winState >= 3) {
+        let pulseAlpha = 0.7 + Math.sin(Date.now() / 300) * 0.3;
+        ctx.globalAlpha = pulseAlpha;
+        ctx.fillStyle = '#fd0';
+        ctx.shadowColor = '#fd0'; ctx.shadowBlur = 20;
+        ctx.font = 'bold 24px Georgia'; ctx.textAlign = 'center';
+        ctx.fillText('"Will you marry me?"', GW / 2, Math.min(travis.y - 30, GH * 0.2));
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 1;
+      }
+
+      // "YES!" response
+      if (winState >= 4) {
+        let pulseSize = 28 + Math.sin(Date.now() / 200) * 4;
+        ctx.fillStyle = '#f5a';
+        ctx.shadowColor = '#f5a'; ctx.shadowBlur = 25;
+        ctx.font = 'bold ' + pulseSize + 'px Georgia'; ctx.textAlign = 'center';
+        ctx.fillText('"YES!" 💍', GW / 2, Math.min(travis.y - 60, GH * 0.12));
+        ctx.shadowBlur = 0;
+        // Heart shower
+        if (Math.random() < 0.3) {
+          spawnParticles(Math.random() * GW, Math.random() * 30, '#f5a', 2, true);
+        }
+      }
+    }
+
+    // Spotlight effect during proposal
+    if (winState >= 2) {
+      let spotCx = (player.x + player.w / 2 + tCx) / 2;
+      let spotCy = tCy;
+      let spotGrad = ctx.createRadialGradient(spotCx, spotCy - 50, 10, spotCx, spotCy, 180);
+      spotGrad.addColorStop(0, 'rgba(253, 208, 0, 0.08)');
+      spotGrad.addColorStop(0.5, 'rgba(253, 208, 0, 0.03)');
+      spotGrad.addColorStop(1, 'rgba(253, 208, 0, 0)');
+      ctx.fillStyle = spotGrad;
+      ctx.fillRect(0, 0, GW, GH);
     }
   }
+
+  // Fireworks (drawn on top)
+  drawFireworks();
 
   // Bullets
   for (let b of bullets) {
@@ -919,10 +1213,21 @@ function draw() {
 }
 
 function loop() {
-  if (!gameRunning && winState < 2) return;
-  if (!gameRunning && winState === 2) {
-    // Keep drawing the final scene briefly
+  if (!gameRunning && winState < 4) return;
+  if (!gameRunning && winState === 4) {
+    // Keep animating fireworks on the final scene
+    updateFireworks();
+    if (fireworkTimer++ % 30 === 0 && fireworks.length < 8) {
+      launchFirework(Math.random() * GW, Math.random() * GH * 0.4 + 30);
+    }
+    // Update heart shower particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+      let p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.05;
+      p.life--; if (p.life <= 0) particles.splice(i, 1);
+    }
+    for (let h of hearts) { h.x -= h.speed; if (h.x < -h.s) { h.x = GW + h.s; h.y = Math.random() * GH; } }
     draw();
+    requestAnimationFrame(loop);
     return;
   }
   update(); draw();
