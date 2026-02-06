@@ -689,7 +689,7 @@ function update() {
   // --- Shooting ---
   let cooldownMax = activePower === 'rapid' ? 6 : 14;
   if (shootCooldown > 0) shootCooldown--;
-  let wantShoot = keys_pressed[' '] || touchFiring;
+  let wantShoot = keys_pressed[' '] || touchFiring || isTouchDevice;
   if (wantShoot && shootCooldown <= 0) {
     shoot();
     shootCooldown = cooldownMax;
