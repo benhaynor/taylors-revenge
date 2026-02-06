@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Taylor's Revenge</title>
+<style>
+  * { margin: 0; padding: 0; }
+  body { background: #1a0a1e; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: 'Georgia', serif; }
+  canvas { display: block; border: 2px solid #d4508b; }
+  #ui {
+    position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+    color: #fff; font-family: Georgia, serif; font-size: 16px; text-align: center;
+    pointer-events: none; z-index: 10;
+    text-shadow: 0 0 10px #d4508b;
+  }
+  #startScreen, #gameOverScreen {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    color: #fff; font-family: Georgia, serif; text-align: center; z-index: 20;
+    background: rgba(20, 5, 30, 0.92); padding: 40px 50px; border-radius: 16px;
+    border: 2px solid #d4508b; box-shadow: 0 0 40px #d4508b44;
+  }
+  #startScreen h1, #gameOverScreen h1 {
+    font-size: 42px; margin-bottom: 10px; color: #f5a;
+    text-shadow: 0 0 20px #f5a;
+  }
+  #startScreen .subtitle { font-size: 18px; color: #d4508b; margin-bottom: 20px; font-style: italic; }
+  #startScreen p, #gameOverScreen p { font-size: 16px; margin-bottom: 8px; color: #cba; }
+  button.play-btn {
+    font-family: Georgia, serif; font-size: 20px; padding: 12px 40px;
+    background: linear-gradient(135deg, #d4508b, #a03070);
+    color: #fff; border: none; cursor: pointer; margin-top: 20px;
+    border-radius: 25px; letter-spacing: 2px;
+    box-shadow: 0 0 20px #d4508b88;
+    transition: all 0.2s;
+  }
+  button.play-btn:hover { background: linear-gradient(135deg, #e06, #c04080); transform: scale(1.05); }
+  #loadingBar { color: #d4508b; font-size: 14px; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<div id="ui">
+  <span id="scoreDisplay">Score: 0</span> &nbsp;&bull;&nbsp;
+  <span id="livesDisplay"></span> &nbsp;&bull;&nbsp;
+  <span id="powerDisplay"></span>
+</div>
+
+<div id="startScreen">
+  <h1>TAYLOR'S REVENGE</h1>
+  <div class="subtitle">"We Are Never Ever Getting Back Together"</div>
+  <p>Arrow keys / WASD to move</p>
+  <p>Space to shoot broken hearts</p>
+  <p>Collect power-ups from defeated exes!</p>
+  <button class="play-btn" onclick="startGame()">SHAKE IT OFF</button>
+  <div id="loadingBar">Loading images...</div>
+</div>
+
+<div id="gameOverScreen" style="display:none;">
+  <h1>BAD BLOOD</h1>
+  <p id="finalScore"></p>
+  <p id="finalWave"></p>
+  <p style="font-style:italic; color:#d4508b; margin-top:10px;">"Band-aids don't fix bullet holes"</p>
+  <button class="play-btn" onclick="startGame()">TRY AGAIN ERA</button>
+</div>
+
+<canvas id="game"></canvas>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = canvas.width = 900;
+const H = canvas.height = 650;
+
+// --- Image loading ---
+const IMAGE_URLS = {
+  taylor: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b1/Taylor_Swift_at_the_2023_MTV_Video_Music_Awards_%283%29.png/200px-Taylor_Swift_at_the_2023_MTV_Video_Music_Awards_%283%29.png',
+  joe_jonas: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/12/Joe_Jonas_Raleigh_928_%28cropped%29.jpg/200px-Joe_Jonas_Raleigh_928_%28cropped%29.jpg',
+  taylor_lautner: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/ba/Taylor_Lautner_Comic-Con_2012.jpg/200px-Taylor_Lautner_Comic-Con_2012.jpg',
+  john_mayer: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/JohnMayerin2019.jpg/200px-JohnMayerin2019.jpg',
+  jake_gyllenhaal: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0e/Jake_Gyllenhaal_2019_by_Glenn_Francis.jpg/200px-Jake_Gyllenhaal_2019_by_Glenn_Francis.jpg',
+  harry_styles: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b2/HarryStylesWembley170623_%2865_of_93%29_%2852982678051%29_%28cropped_2%29.jpg/200px-HarryStylesWembley170623_%2865_of_93%29_%2852982678051%29_%28cropped_2%29.jpg',
+  calvin_harris: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/ff/Calvin_Harris_-_Press_Image_1.tif/lossy-page1-200px-Calvin_Harris_-_Press_Image_1.tif.jpg',
+  tom_hiddleston: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5b/Tom_Hiddleston_at_the_2024_Toronto_International_Film_Festival_%28cropped%29.jpg/200px-Tom_Hiddleston_at_the_2024_Toronto_International_Film_Festival_%28cropped%29.jpg',
+  joe_alwyn: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/bc/Joseph_Alwyn.jpg/200px-Joseph_Alwyn.jpg',
+  eddie_redmayne: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Eddie_Redmayne_Smile_2022.jpg/200px-Eddie_Redmayne_Smile_2022.jpg',
+};
+
+const images = {};
+let imagesLoaded = 0;
+const totalImages = Object.keys(IMAGE_URLS).length;
+
+for (let [key, url] of Object.entries(IMAGE_URLS)) {
+  let img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    imagesLoaded++;
+    document.getElementById('loadingBar').textContent = `Loading images... ${imagesLoaded}/${totalImages}`;
+    if (imagesLoaded >= totalImages) {
+      document.getElementById('loadingBar').textContent = 'Ready!';
+    }
+  };
+  img.onerror = () => {
+    imagesLoaded++;
+    if (imagesLoaded >= totalImages) {
+      document.getElementById('loadingBar').textContent = 'Ready!';
+    }
+  };
+  img.src = url;
+  images[key] = img;
+}
+
+// Ex-boyfriend data
+const EXES = [
+  { key: 'joe_jonas',       name: 'Joe Jonas',       song: 'Last Kiss',                hp: 2, speed: 2.0, size: 50, type: 'standard', points: 20 },
+  { key: 'taylor_lautner',  name: 'Taylor Lautner',  song: 'Back to December',         hp: 1, speed: 3.5, size: 44, type: 'fast',     points: 30 },
+  { key: 'john_mayer',      name: 'John Mayer',      song: 'Dear John',                hp: 4, speed: 1.3, size: 58, type: 'bomber',   points: 50 },
+  { key: 'jake_gyllenhaal', name: 'Jake Gyllenhaal', song: 'All Too Well',             hp: 3, speed: 1.6, size: 55, type: 'standard', points: 35 },
+  { key: 'harry_styles',    name: 'Harry Styles',    song: 'Style',                    hp: 2, speed: 2.8, size: 48, type: 'fast',     points: 30 },
+  { key: 'calvin_harris',   name: 'Calvin Harris',   song: 'This Is What You Came For',hp: 3, speed: 1.8, size: 54, type: 'bomber',   points: 45 },
+  { key: 'tom_hiddleston',  name: 'Tom Hiddleston',  song: 'Getaway Car',              hp: 2, speed: 2.2, size: 50, type: 'standard', points: 25 },
+  { key: 'joe_alwyn',       name: 'Joe Alwyn',       song: 'Exile',                    hp: 5, speed: 1.2, size: 60, type: 'bomber',   points: 60 },
+  { key: 'eddie_redmayne',  name: 'Eddie Redmayne',  song: 'Everything Has Changed',   hp: 1, speed: 3.2, size: 42, type: 'fast',     points: 25 },
+];
+
+// Game state
+let player, bullets, enemies, particles, powerUps, hearts;
+let score, lives, wave, waveTimer, spawnTimer, gameRunning, gameOver;
+let keys_pressed = {};
+let activePower = null;
+let powerTimer = 0;
+let shootCooldown = 0;
+let invincibleTimer = 0;
+let difficultyMult = 1;
+let defeatedExes = [];
+let floatingTexts = [];
+
+document.addEventListener('keydown', e => { keys_pressed[e.key] = true; if(e.key === ' ') e.preventDefault(); });
+document.addEventListener('keyup', e => { keys_pressed[e.key] = false; });
+
+// Power-up types - Taylor themed
+const POWER_TYPES = [
+  { type: 'spread',  color: '#f5a', label: 'ERAS TOUR',     duration: 600, emoji: '\u2728' },
+  { type: 'rapid',   color: '#0ff', label: 'SHAKE IT OFF',  duration: 500, emoji: '\u266B' },
+  { type: 'shield',  color: '#af0', label: 'FEARLESS',      duration: 400, emoji: '\u2B50' },
+  { type: 'missile', color: '#f0f', label: 'BAD BLOOD',     duration: 450, emoji: '\uD83D\uDCA5' },
+];
+
+function startGame() {
+  document.getElementById('startScreen').style.display = 'none';
+  document.getElementById('gameOverScreen').style.display = 'none';
+
+  player = { x: 100, y: H / 2, w: 60, h: 60, speed: 5 };
+  bullets = [];
+  enemies = [];
+  particles = [];
+  powerUps = [];
+  floatingTexts = [];
+  score = 0;
+  lives = 3;
+  wave = 1;
+  waveTimer = 0;
+  spawnTimer = 0;
+  shootCooldown = 0;
+  invincibleTimer = 0;
+  activePower = null;
+  powerTimer = 0;
+  difficultyMult = 1;
+  defeatedExes = [];
+  gameRunning = true;
+  gameOver = false;
+
+  // Background hearts
+  hearts = [];
+  for (let i = 0; i < 40; i++) {
+    hearts.push({ x: Math.random() * W, y: Math.random() * H, s: Math.random() * 8 + 4, speed: Math.random() * 1.5 + 0.5, alpha: Math.random() * 0.15 + 0.05 });
+  }
+
+  requestAnimationFrame(loop);
+}
+
+function spawnEnemy() {
+  // Pick a random ex, weighted by wave
+  let available = EXES.filter(e => {
+    if (e.type === 'bomber' && wave < 2) return false;
+    if (e.type === 'fast' && wave < 1) return false;
+    return true;
+  });
+  let template = available[Math.floor(Math.random() * available.length)];
+  let e = {
+    x: W + template.size,
+    y: Math.random() * (H - template.size * 2) + template.size,
+    w: template.size,
+    h: template.size,
+    hp: template.hp + Math.floor(difficultyMult * 0.5),
+    maxHp: template.hp + Math.floor(difficultyMult * 0.5),
+    speed: template.speed + difficultyMult * 0.2,
+    type: template.type,
+    key: template.key,
+    name: template.name,
+    song: template.song,
+    points: template.points,
+    shootTimer: 80,
+    bobPhase: Math.random() * Math.PI * 2,
+  };
+  enemies.push(e);
+}
+
+function spawnPowerUp(x, y) {
+  if (Math.random() < 0.28) {
+    let p = POWER_TYPES[Math.floor(Math.random() * POWER_TYPES.length)];
+    powerUps.push({ x, y, w: 28, h: 28, vx: -0.8, vy: 0, ...p, bobPhase: Math.random() * Math.PI * 2 });
+  }
+}
+
+function spawnParticles(x, y, color, count, isHeart) {
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 7,
+      vy: (Math.random() - 0.5) * 7,
+      life: 25 + Math.random() * 25,
+      color,
+      size: Math.random() * 4 + 2,
+      isHeart: isHeart || false,
+    });
+  }
+}
+
+function addFloatingText(x, y, text, color) {
+  floatingTexts.push({ x, y, text, color, life: 60, vy: -1.5 });
+}
+
+function drawHeart(cx, cy, size, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy + size * 0.3);
+  ctx.bezierCurveTo(cx, cy - size * 0.2, cx - size * 0.6, cy - size * 0.4, cx - size * 0.6, cy);
+  ctx.bezierCurveTo(cx - size * 0.6, cy + size * 0.3, cx, cy + size * 0.6, cx, cy + size * 0.8);
+  ctx.bezierCurveTo(cx, cy + size * 0.6, cx + size * 0.6, cy + size * 0.3, cx + size * 0.6, cy);
+  ctx.bezierCurveTo(cx + size * 0.6, cy - size * 0.4, cx, cy - size * 0.2, cx, cy + size * 0.3);
+  ctx.fill();
+}
+
+function drawBrokenHeart(cx, cy, size, color) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  // Left half
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(0, size * 0.3);
+  ctx.bezierCurveTo(0, -size * 0.2, -size * 0.6, -size * 0.4, -size * 0.6, 0);
+  ctx.bezierCurveTo(-size * 0.6, size * 0.3, 0, size * 0.6, 0, size * 0.8);
+  ctx.lineTo(-size * 0.08, size * 0.4);
+  ctx.lineTo(size * 0.1, size * 0.2);
+  ctx.lineTo(-size * 0.05, 0);
+  ctx.lineTo(size * 0.08, -size * 0.15);
+  ctx.closePath();
+  ctx.fill();
+  // Right half (offset)
+  ctx.translate(size * 0.08, 0);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(0, size * 0.3);
+  ctx.bezierCurveTo(0, -size * 0.2, size * 0.6, -size * 0.4, size * 0.6, 0);
+  ctx.bezierCurveTo(size * 0.6, size * 0.3, 0, size * 0.6, 0, size * 0.8);
+  ctx.lineTo(size * 0.08, size * 0.4);
+  ctx.lineTo(-size * 0.1, size * 0.2);
+  ctx.lineTo(size * 0.05, 0);
+  ctx.lineTo(-size * 0.08, -size * 0.15);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawCircleImage(img, cx, cy, radius) {
+  if (!img || !img.complete || img.naturalWidth === 0) {
+    // Fallback circle
+    ctx.fillStyle = '#555';
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = radius * 0.6 + 'px Georgia';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('?', cx, cy);
+    return;
+  }
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.clip();
+  let aspect = img.naturalWidth / img.naturalHeight;
+  let drawW, drawH;
+  if (aspect > 1) {
+    drawH = radius * 2;
+    drawW = drawH * aspect;
+  } else {
+    drawW = radius * 2;
+    drawH = drawW / aspect;
+  }
+  ctx.drawImage(img, cx - drawW / 2, cy - drawH / 2, drawW, drawH);
+  ctx.restore();
+}
+
+function shoot() {
+  let bSpeed = 9;
+
+  if (activePower === 'spread') {
+    for (let angle = -0.35; angle <= 0.35; angle += 0.175) {
+      bullets.push({ x: player.x + player.w, y: player.y + player.h / 2, vx: Math.cos(angle) * bSpeed, vy: Math.sin(angle) * bSpeed, color: '#f5a', r: 5, damage: 1, friendly: true });
+    }
+  } else if (activePower === 'missile') {
+    bullets.push({ x: player.x + player.w, y: player.y + player.h / 2 - 12, vx: bSpeed * 1.2, vy: -0.8, color: '#f0f', r: 6, damage: 3, friendly: true, isMissile: true });
+    bullets.push({ x: player.x + player.w, y: player.y + player.h / 2 + 12, vx: bSpeed * 1.2, vy: 0.8, color: '#f0f', r: 6, damage: 3, friendly: true, isMissile: true });
+  } else {
+    bullets.push({ x: player.x + player.w, y: player.y + player.h / 2, vx: bSpeed, vy: 0, color: '#f44', r: 5, damage: 1, friendly: true });
+  }
+}
+
+function playerHit() {
+  if (invincibleTimer > 0) return;
+  if (activePower === 'shield') {
+    activePower = null;
+    powerTimer = 0;
+    invincibleTimer = 60;
+    spawnParticles(player.x + player.w / 2, player.y + player.h / 2, '#af0', 20, false);
+    addFloatingText(player.x, player.y, 'FEARLESS!', '#af0');
+    return;
+  }
+  lives--;
+  invincibleTimer = 90;
+  spawnParticles(player.x + player.w / 2, player.y + player.h / 2, '#f5a', 15, true);
+  if (lives <= 0) {
+    gameRunning = false;
+    gameOver = true;
+    document.getElementById('gameOverScreen').style.display = 'block';
+    document.getElementById('finalScore').textContent = 'Score: ' + score;
+    document.getElementById('finalWave').textContent = 'Era ' + wave + ' | Exes defeated: ' + defeatedExes.length;
+  }
+}
+
+function circleRectCollide(cx, cy, cr, rx, ry, rw, rh) {
+  let closestX = Math.max(rx, Math.min(cx, rx + rw));
+  let closestY = Math.max(ry, Math.min(cy, ry + rh));
+  let dx = cx - closestX;
+  let dy = cy - closestY;
+  return (dx * dx + dy * dy) < (cr * cr);
+}
+
+function bulletHitCircle(bullet, cx, cy, cr) {
+  let dx = bullet.x - cx;
+  let dy = bullet.y - cy;
+  return (dx * dx + dy * dy) < ((bullet.r + cr) * (bullet.r + cr));
+}
+
+function update() {
+  // Player movement
+  let dx = 0, dy = 0;
+  if (keys_pressed['ArrowLeft'] || keys_pressed['a'] || keys_pressed['A']) dx = -1;
+  if (keys_pressed['ArrowRight'] || keys_pressed['d'] || keys_pressed['D']) dx = 1;
+  if (keys_pressed['ArrowUp'] || keys_pressed['w'] || keys_pressed['W']) dy = -1;
+  if (keys_pressed['ArrowDown'] || keys_pressed['s'] || keys_pressed['S']) dy = 1;
+  if (dx && dy) { dx *= 0.707; dy *= 0.707; }
+  player.x += dx * player.speed;
+  player.y += dy * player.speed;
+  player.x = Math.max(0, Math.min(W - player.w, player.x));
+  player.y = Math.max(0, Math.min(H - player.h, player.y));
+
+  // Shooting
+  let cooldownMax = activePower === 'rapid' ? 6 : 14;
+  if (shootCooldown > 0) shootCooldown--;
+  if (keys_pressed[' '] && shootCooldown <= 0) {
+    shoot();
+    shootCooldown = cooldownMax;
+  }
+
+  // Power timer
+  if (activePower) {
+    powerTimer--;
+    if (powerTimer <= 0) { activePower = null; }
+  }
+  if (invincibleTimer > 0) invincibleTimer--;
+
+  // Wave management
+  waveTimer++;
+  if (waveTimer > 1000 + wave * 200) {
+    wave++;
+    waveTimer = 0;
+    difficultyMult += 0.3;
+    addFloatingText(W / 2 - 60, H / 2, 'ERA ' + wave, '#f5a');
+  }
+
+  // Spawn enemies
+  spawnTimer--;
+  if (spawnTimer <= 0) {
+    spawnEnemy();
+    spawnTimer = Math.max(25, 65 - wave * 5);
+  }
+
+  // Update bullets
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    let b = bullets[i];
+    b.x += b.vx;
+    b.y += b.vy;
+    if (b.x < -10 || b.x > W + 10 || b.y < -10 || b.y > H + 10) {
+      bullets.splice(i, 1);
+    }
+  }
+
+  // Update enemies
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    let e = enemies[i];
+    e.x -= e.speed;
+    e.bobPhase += 0.03;
+    let bobY = Math.sin(e.bobPhase) * 0.8;
+    e.y += bobY;
+
+    // Bombers shoot
+    if (e.type === 'bomber') {
+      e.shootTimer--;
+      if (e.shootTimer <= 0) {
+        e.shootTimer = 70;
+        let angle = Math.atan2((player.y + player.h / 2) - (e.y + e.h / 2), (player.x + player.w / 2) - (e.x + e.w / 2));
+        bullets.push({ x: e.x, y: e.y + e.h / 2, vx: Math.cos(angle) * 4.5, vy: Math.sin(angle) * 4.5, color: '#88f', r: 5, damage: 1, friendly: false });
+      }
+    }
+
+    // Off screen
+    if (e.x + e.w < -30) {
+      enemies.splice(i, 1);
+      continue;
+    }
+
+    let eCx = e.x + e.w / 2;
+    let eCy = e.y + e.h / 2;
+    let eR = e.w / 2;
+
+    // Bullet-enemy collision
+    for (let j = bullets.length - 1; j >= 0; j--) {
+      let b = bullets[j];
+      if (!b.friendly) continue;
+      if (bulletHitCircle(b, eCx, eCy, eR)) {
+        e.hp -= b.damage;
+        bullets.splice(j, 1);
+        spawnParticles(b.x, b.y, '#f5a', 5, true);
+        if (e.hp <= 0) {
+          score += e.points;
+          if (!defeatedExes.includes(e.name)) defeatedExes.push(e.name);
+          spawnParticles(eCx, eCy, '#f44', 18, true);
+          addFloatingText(e.x, e.y - 20, e.name + '!', '#f5a');
+          addFloatingText(e.x, e.y + 5, '+' + e.points, '#ff0');
+          spawnPowerUp(e.x, e.y);
+          enemies.splice(i, 1);
+          break;
+        }
+      }
+    }
+  }
+
+  // Enemy-player collision
+  let pCx = player.x + player.w / 2;
+  let pCy = player.y + player.h / 2;
+  let pR = player.w / 2 - 5;
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    let e = enemies[i];
+    let eCx = e.x + e.w / 2;
+    let eCy = e.y + e.h / 2;
+    let eR = e.w / 2;
+    let ddx = pCx - eCx;
+    let ddy = pCy - eCy;
+    if (ddx * ddx + ddy * ddy < (pR + eR) * (pR + eR)) {
+      spawnParticles(eCx, eCy, '#f44', 15, true);
+      addFloatingText(e.x, e.y - 15, e.name + '!', '#f88');
+      enemies.splice(i, 1);
+      playerHit();
+    }
+  }
+
+  // Enemy bullet-player collision
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    let b = bullets[i];
+    if (b.friendly) continue;
+    if (bulletHitCircle(b, pCx, pCy, pR)) {
+      bullets.splice(i, 1);
+      playerHit();
+    }
+  }
+
+  // Power-ups
+  for (let i = powerUps.length - 1; i >= 0; i--) {
+    let p = powerUps[i];
+    p.x += p.vx;
+    p.bobPhase += 0.05;
+    p.y += Math.sin(p.bobPhase) * 0.5;
+    if (p.x + p.w < 0) { powerUps.splice(i, 1); continue; }
+    let ppCx = p.x + p.w / 2;
+    let ppCy = p.y + p.h / 2;
+    let ddx = pCx - ppCx;
+    let ddy = pCy - ppCy;
+    if (ddx * ddx + ddy * ddy < (pR + p.w / 2) * (pR + p.w / 2)) {
+      activePower = p.type;
+      powerTimer = p.duration;
+      spawnParticles(p.x, p.y, p.color, 12, false);
+      addFloatingText(p.x, p.y - 15, p.label, p.color);
+      powerUps.splice(i, 1);
+    }
+  }
+
+  // Particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    let p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vx *= 0.95;
+    p.vy *= 0.95;
+    p.life--;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+
+  // Floating texts
+  for (let i = floatingTexts.length - 1; i >= 0; i--) {
+    let ft = floatingTexts[i];
+    ft.y += ft.vy;
+    ft.life--;
+    if (ft.life <= 0) floatingTexts.splice(i, 1);
+  }
+
+  // Background hearts
+  for (let h of hearts) {
+    h.x -= h.speed;
+    if (h.x < -h.s) { h.x = W + h.s; h.y = Math.random() * H; }
+  }
+
+  // UI
+  document.getElementById('scoreDisplay').textContent = 'Score: ' + score;
+  let livesStr = '';
+  for (let i = 0; i < lives; i++) livesStr += '\u2764\uFE0F ';
+  document.getElementById('livesDisplay').innerHTML = livesStr || '<span style="color:#f44">NO LIVES</span>';
+  let pd = document.getElementById('powerDisplay');
+  if (activePower) {
+    let pt = POWER_TYPES.find(p => p.type === activePower);
+    pd.textContent = pt.emoji + ' ' + pt.label + ' (' + Math.ceil(powerTimer / 60) + 's)';
+    pd.style.color = pt.color;
+  } else {
+    pd.textContent = 'Era ' + wave;
+    pd.style.color = '#d4508b';
+  }
+}
+
+function draw() {
+  // Background gradient
+  let grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#1a0520');
+  grad.addColorStop(0.5, '#200a28');
+  grad.addColorStop(1, '#120318');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Floating background hearts
+  for (let h of hearts) {
+    ctx.globalAlpha = h.alpha;
+    drawHeart(h.x, h.y, h.s, '#d4508b');
+  }
+  ctx.globalAlpha = 1;
+
+  // Power-ups
+  for (let p of powerUps) {
+    ctx.save();
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 15;
+    // Glowing circle
+    ctx.fillStyle = p.color + '44';
+    ctx.beginPath();
+    ctx.arc(p.x + p.w / 2, p.y + p.h / 2, p.w / 2 + 4, 0, Math.PI * 2);
+    ctx.fill();
+    // Star shape
+    let cx = p.x + p.w / 2;
+    let cy = p.y + p.h / 2;
+    let rot = Date.now() / 400;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    for (let i = 0; i < 5; i++) {
+      let angle = rot + (i * Math.PI * 2 / 5) - Math.PI / 2;
+      let outerR = p.w / 2;
+      let innerR = p.w / 4;
+      ctx.lineTo(cx + Math.cos(angle) * outerR, cy + Math.sin(angle) * outerR);
+      let innerAngle = angle + Math.PI / 5;
+      ctx.lineTo(cx + Math.cos(innerAngle) * innerR, cy + Math.sin(innerAngle) * innerR);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    // Label
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 10px Georgia';
+    ctx.textAlign = 'center';
+    ctx.fillText(p.label, p.x + p.w / 2, p.y - 10);
+  }
+
+  // Enemies
+  for (let e of enemies) {
+    let cx = e.x + e.w / 2;
+    let cy = e.y + e.h / 2;
+    let r = e.w / 2;
+
+    // Glow
+    ctx.shadowColor = e.type === 'bomber' ? '#44f' : e.type === 'fast' ? '#fa0' : '#f44';
+    ctx.shadowBlur = 12;
+
+    // Border ring
+    ctx.strokeStyle = e.type === 'bomber' ? '#66f' : e.type === 'fast' ? '#fa0' : '#f66';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r + 3, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Photo
+    drawCircleImage(images[e.key], cx, cy, r);
+
+    // HP bar
+    if (e.maxHp > 1) {
+      let barW = e.w + 6;
+      let barX = cx - barW / 2;
+      let barY = e.y - 10;
+      ctx.fillStyle = '#400';
+      ctx.fillRect(barX, barY, barW, 4);
+      ctx.fillStyle = '#f44';
+      ctx.fillRect(barX, barY, barW * (e.hp / e.maxHp), 4);
+    }
+
+    // Name
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px Georgia';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(e.name, cx, e.y + e.h + 6);
+  }
+
+  // Player
+  if (invincibleTimer <= 0 || Math.floor(invincibleTimer / 4) % 2 === 0) {
+    let pCx = player.x + player.w / 2;
+    let pCy = player.y + player.h / 2;
+    let pR = player.w / 2;
+
+    // Glow
+    ctx.shadowColor = activePower === 'shield' ? '#af0' : '#f5a';
+    ctx.shadowBlur = 20;
+
+    // Border
+    ctx.strokeStyle = activePower === 'shield' ? '#af0' : '#f5a';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(pCx, pCy, pR + 3, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Shield extra ring
+    if (activePower === 'shield') {
+      ctx.strokeStyle = '#af044';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(pCx, pCy, pR + 10, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+
+    // Photo
+    drawCircleImage(images.taylor, pCx, pCy, pR);
+
+    // Name tag
+    ctx.fillStyle = '#f5a';
+    ctx.font = 'bold 12px Georgia';
+    ctx.textAlign = 'center';
+    ctx.fillText('Taylor Swift', pCx, player.y + player.h + 8);
+  }
+
+  // Bullets
+  for (let b of bullets) {
+    if (b.friendly) {
+      ctx.shadowColor = b.color;
+      ctx.shadowBlur = 8;
+      if (b.isMissile) {
+        // Draw a small star for missiles
+        ctx.fillStyle = b.color;
+        ctx.beginPath();
+        for (let i = 0; i < 4; i++) {
+          let angle = (i * Math.PI / 2) + Date.now() / 100;
+          ctx.lineTo(b.x + Math.cos(angle) * b.r, b.y + Math.sin(angle) * b.r);
+          ctx.lineTo(b.x + Math.cos(angle + Math.PI / 4) * b.r * 0.4, b.y + Math.sin(angle + Math.PI / 4) * b.r * 0.4);
+        }
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        drawBrokenHeart(b.x, b.y - b.r, b.r * 1.5, b.color);
+      }
+    } else {
+      // Enemy bullets - blue notes
+      ctx.fillStyle = b.color;
+      ctx.shadowColor = b.color;
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.shadowBlur = 0;
+
+  // Particles
+  for (let p of particles) {
+    ctx.globalAlpha = Math.min(1, p.life / 25);
+    if (p.isHeart) {
+      drawHeart(p.x, p.y, p.size * 1.5, p.color);
+    } else {
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  // Floating texts
+  for (let ft of floatingTexts) {
+    ctx.globalAlpha = Math.min(1, ft.life / 30);
+    ctx.fillStyle = ft.color;
+    ctx.font = 'bold 16px Georgia';
+    ctx.textAlign = 'center';
+    ctx.shadowColor = ft.color;
+    ctx.shadowBlur = 6;
+    ctx.fillText(ft.text, ft.x, ft.y);
+    ctx.shadowBlur = 0;
+  }
+  ctx.globalAlpha = 1;
+}
+
+function loop() {
+  if (!gameRunning) return;
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+</script>
+</body>
+</html>
