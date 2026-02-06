@@ -96,6 +96,25 @@
     <button class="play-btn" onclick="startGame()">TRY AGAIN ERA</button>
   </div>
 
+  <div id="winScreen" style="display:none;">
+    <h1 style="color:#fd0; text-shadow: 0 0 20px #fd0;">LOVE STORY</h1>
+    <p style="font-size: clamp(14px, 3.5vw, 20px); color:#f5a; margin-bottom: 12px;">All the exes are defeated...</p>
+    <div id="winPortraits" style="display:flex; justify-content:center; align-items:center; gap:10px; margin: 16px 0;">
+      <div style="text-align:center;">
+        <div id="winTaylor" style="width:80px;height:80px;border-radius:50%;overflow:hidden;border:3px solid #f5a;margin:0 auto;"></div>
+        <div style="color:#f5a;font-size:12px;margin-top:4px;">Taylor</div>
+      </div>
+      <div style="font-size:32px;">💍</div>
+      <div style="text-align:center;">
+        <div id="winTravis" style="width:80px;height:80px;border-radius:50%;overflow:hidden;border:3px solid #fd0;margin:0 auto;"></div>
+        <div style="color:#fd0;font-size:12px;margin-top:4px;">Travis</div>
+      </div>
+    </div>
+    <p style="font-style:italic; color:#fd0; margin: 8px 0;">"It's a love story, baby just say yes"</p>
+    <p id="winScore" style="color:#cba;"></p>
+    <button class="play-btn" style="background: linear-gradient(135deg, #fd0, #fa0);" onclick="startGame()">PLAY AGAIN</button>
+  </div>
+
   <canvas id="game"></canvas>
 
   <div id="spotifyPlayer">
@@ -186,6 +205,7 @@ const IMAGE_URLS = {
   tom_hiddleston: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5b/Tom_Hiddleston_at_the_2024_Toronto_International_Film_Festival_%28cropped%29.jpg/200px-Tom_Hiddleston_at_the_2024_Toronto_International_Film_Festival_%28cropped%29.jpg',
   joe_alwyn: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/bc/Joseph_Alwyn.jpg/200px-Joseph_Alwyn.jpg',
   eddie_redmayne: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Eddie_Redmayne_Smile_2022.jpg/200px-Eddie_Redmayne_Smile_2022.jpg',
+  travis_kelce: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Travis_Kelce_%2853790185007%29_%28cropped%29.jpg/200px-Travis_Kelce_%2853790185007%29_%28cropped%29.jpg',
 };
 const images = {};
 let imagesLoaded = 0;
@@ -239,6 +259,9 @@ let invincibleTimer = 0;
 let difficultyMult = 1;
 let defeatedExes = [];
 let floatingTexts = [];
+let gameTimer = 0;
+let winState = 0; // 0 = playing, 1 = travis entering, 2 = won
+let travis = null;
 
 // --- Keyboard input ---
 document.addEventListener('keydown', e => { keys_pressed[e.key] = true; if(e.key === ' ') e.preventDefault(); });
@@ -314,7 +337,12 @@ const POWER_TYPES = [
 function startGame() {
   document.getElementById('startScreen').style.display = 'none';
   document.getElementById('gameOverScreen').style.display = 'none';
+  document.getElementById('winScreen').style.display = 'none';
+  // Reset spotify to playlist
+  let sp = document.querySelector('#spotifyPlayer iframe');
+  if (sp) sp.src = 'https://open.spotify.com/embed/playlist/37i9dQZF1DX5KpP2LN299J?utm_source=generator&theme=0';
   player = { x: 80, y: GH / 2, w: 60, h: 60, speed: 5 };
+  gameTimer = 0; winState = 0; travis = null;
   bullets = []; enemies = []; particles = []; powerUps = []; floatingTexts = [];
   score = 0; lives = 3; wave = 1; waveTimer = 0; spawnTimer = 0;
   shootCooldown = 0; invincibleTimer = 0; activePower = null; powerTimer = 0;
@@ -503,16 +531,80 @@ function update() {
   if (activePower) { powerTimer--; if (powerTimer <= 0) activePower = null; }
   if (invincibleTimer > 0) invincibleTimer--;
 
-  // Wave management
-  waveTimer++;
-  if (waveTimer > 1000 + wave * 200) {
-    wave++; waveTimer = 0; difficultyMult += 0.3;
-    addFloatingText(GW / 2 - 60, GH / 2, 'ERA ' + wave, '#f5a');
+  // Game timer (60 seconds = 3600 frames at 60fps)
+  gameTimer++;
+
+  // Win condition: after 60 seconds, stop spawning and send Travis
+  if (gameTimer >= 3600 && winState === 0) {
+    winState = 1;
+    // Clear remaining enemies with explosions
+    for (let e of enemies) {
+      spawnParticles(e.x + e.w/2, e.y + e.h/2, '#f5a', 12, true);
+      addFloatingText(e.x, e.y - 10, 'Bye!', '#f5a');
+    }
+    enemies = [];
+    bullets = bullets.filter(b => b.friendly);
+    // Spawn Travis from the right
+    travis = { x: GW + 40, y: GH / 2 - 35, w: 70, h: 70, targetX: GW / 2 - 35 };
+    addFloatingText(GW / 2, GH / 3, 'All exes defeated!', '#fd0');
   }
 
-  // Spawn enemies
-  spawnTimer--;
-  if (spawnTimer <= 0) { spawnEnemy(); spawnTimer = Math.max(25, 65 - wave * 5); }
+  // Travis walking in
+  if (winState === 1 && travis) {
+    travis.x -= 3;
+    if (travis.x <= travis.targetX) {
+      travis.x = travis.targetX;
+      // Move player toward Travis
+      let targetPlayerX = travis.x - player.w - 20;
+      if (player.x < targetPlayerX - 2) {
+        player.x += 3;
+      } else {
+        // They've met! Show win screen
+        winState = 2;
+        gameRunning = false;
+        // Switch Spotify to Love Story
+        let sp = document.querySelector('#spotifyPlayer iframe');
+        if (sp) sp.src = 'https://open.spotify.com/embed/track/3CeCwYWvdfXbZLXFhBrbnf?utm_source=generator&theme=0';
+        document.getElementById('spotifyPlayer').style.display = 'block';
+        // Show win screen after a short delay
+        setTimeout(() => {
+          // Fill in portraits
+          let tayDiv = document.getElementById('winTaylor');
+          let travDiv = document.getElementById('winTravis');
+          if (images.taylor.complete) tayDiv.innerHTML = '<img src="' + images.taylor.src + '" style="width:100%;height:100%;object-fit:cover;">';
+          if (images.travis_kelce.complete) travDiv.innerHTML = '<img src="' + images.travis_kelce.src + '" style="width:100%;height:100%;object-fit:cover;">';
+          document.getElementById('winScore').textContent = 'Final Score: ' + score + ' | Exes defeated: ' + defeatedExes.length;
+          document.getElementById('winScreen').style.display = 'block';
+        }, 1500);
+      }
+    }
+    // Still update particles and hearts during Travis entrance
+    for (let i = particles.length - 1; i >= 0; i--) {
+      let p = particles[i]; p.x += p.vx; p.y += p.vy; p.vx *= 0.95; p.vy *= 0.95;
+      p.life--; if (p.life <= 0) particles.splice(i, 1);
+    }
+    for (let i = floatingTexts.length - 1; i >= 0; i--) {
+      let ft = floatingTexts[i]; ft.y += ft.vy; ft.life--;
+      if (ft.life <= 0) floatingTexts.splice(i, 1);
+    }
+    for (let h of hearts) { h.x -= h.speed; if (h.x < -h.s) { h.x = GW + h.s; h.y = Math.random() * GH; } }
+    return;
+  }
+
+  // Wave management
+  if (winState === 0) {
+    waveTimer++;
+    if (waveTimer > 1000 + wave * 200) {
+      wave++; waveTimer = 0; difficultyMult += 0.3;
+      addFloatingText(GW / 2 - 60, GH / 2, 'ERA ' + wave, '#f5a');
+    }
+  }
+
+  // Spawn enemies (only while playing)
+  if (winState === 0) {
+    spawnTimer--;
+    if (spawnTimer <= 0) { spawnEnemy(); spawnTimer = Math.max(25, 65 - wave * 5); }
+  }
 
   // Update bullets
   for (let i = bullets.length - 1; i >= 0; i--) {
@@ -675,7 +767,8 @@ function update() {
   for (let h of hearts) { h.x -= h.speed; if (h.x < -h.s) { h.x = GW + h.s; h.y = Math.random() * GH; } }
 
   // UI
-  document.getElementById('scoreDisplay').textContent = 'Score: ' + score;
+  let secsLeft = Math.max(0, Math.ceil((3600 - gameTimer) / 60));
+  document.getElementById('scoreDisplay').textContent = 'Score: ' + score + (winState === 0 ? '  |  ' + secsLeft + 's left' : '');
   let livesStr = '';
   for (let i = 0; i < lives; i++) livesStr += '\u2764\uFE0F ';
   document.getElementById('livesDisplay').innerHTML = livesStr || '<span style="color:#f44">NO LIVES</span>';
@@ -748,6 +841,23 @@ function draw() {
     ctx.fillText('Taylor Swift', pCx, player.y + player.h + 8);
   }
 
+  // Travis Kelce
+  if (travis && winState >= 1) {
+    let tCx = travis.x + travis.w / 2, tCy = travis.y + travis.h / 2, tR = travis.w / 2;
+    ctx.shadowColor = '#fd0'; ctx.shadowBlur = 25;
+    ctx.strokeStyle = '#fd0'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(tCx, tCy, tR + 3, 0, Math.PI * 2); ctx.stroke();
+    ctx.shadowBlur = 0;
+    drawCircleImage(images.travis_kelce, tCx, tCy, tR);
+    ctx.fillStyle = '#fd0'; ctx.font = 'bold 13px Georgia'; ctx.textAlign = 'center';
+    ctx.fillText('Travis Kelce', tCx, travis.y + travis.h + 10);
+    // Draw ring emoji between them
+    if (winState >= 1 && travis.x <= travis.targetX + 50) {
+      ctx.font = '28px Georgia'; ctx.textAlign = 'center';
+      ctx.fillText('\uD83D\uDC8D', (player.x + player.w + travis.x) / 2, travis.y + travis.h / 2 - 30);
+    }
+  }
+
   // Bullets
   for (let b of bullets) {
     if (b.friendly) {
@@ -809,7 +919,12 @@ function draw() {
 }
 
 function loop() {
-  if (!gameRunning) return;
+  if (!gameRunning && winState < 2) return;
+  if (!gameRunning && winState === 2) {
+    // Keep drawing the final scene briefly
+    draw();
+    return;
+  }
   update(); draw();
   requestAnimationFrame(loop);
 }
